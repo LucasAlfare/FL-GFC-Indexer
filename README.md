@@ -1,7 +1,3 @@
-Aqui está seu README com a seção de `filtering` **bem mais explicada e integrada**, sem quebrar teu estilo:
-
----
-
 # 🎸 Guitar Flash Custom Indexer
 
 Script em Kotlin para **indexar todas as músicas do Guitar Flash Custom**, gerando um JSON estruturado, organizado e otimizado para busca.
