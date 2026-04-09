@@ -1,10 +1,14 @@
-# 🎸 Guitar Flash Custom Indexer
+# 🎸 FL Guitar Flash Custom Indexer
 
 Script em Kotlin para **indexar todas as músicas do Guitar Flash Custom**, gerando um JSON estruturado, organizado e otimizado para busca.
 O site original é antigo e não possui sistema de busca eficiente — esse projeto resolve isso criando um índice local completo.
 
 Você pode acessar a página inicial da listagem de músicas do GF custom [neste link](https://guitarflash.com/custom/lista.asp?pag=0). Já as páginas das músicas seguem esse formato:
 `http://guitarflash.me/?gfcMus=XXXXXXXXXXXX`, onde esses "XXX..." são o ID respectivo da música.
+
+Já estou deixando incluso, uma versão prévia de resultado de processamento do índice. É o arquivo [songs.json](songs.json) (~1.7mb) e uma versão deste mesmo JSON com um pouco de compactação (loss-less) [songs_compact.json](songs_compact.json) (~800kb). Mais abaixo na leitura eu falo um pouco mais sobre como estruturei essa compactação.
+
+Ainda é possível ter muito lixo e sujeira de split/parsing, mas por enquanto é o melhor índice que temos para o GF Custom.
 
 ---
 
@@ -13,10 +17,10 @@ Você pode acessar a página inicial da listagem de músicas do GF custom [neste
 * 🔍 Varre automaticamente todas as páginas (88 no total por enquanto?)
 * 🎵 Extrai:
 
-    * ID da música
-    * Título
-    * Artista
-    * Dificuldades
+  * ID da música
+  * Título
+  * Artista
+  * Dificuldades
 * 🧹 Normaliza e limpa os dados
 * 🚫 Remove duplicados durante a coleta (mais eficiente)
 * 🧠 Gera campo otimizado para busca (`filtering`)
@@ -198,9 +202,9 @@ song.filtering.contains(query)
 
 * Funciona com qualquer parte do nome:
 
-    * `avenged`
-    * `heaven`
-    * `sevenfold`
+  * `avenged`
+  * `heaven`
+  * `sevenfold`
 
 ---
 
@@ -265,6 +269,196 @@ O `filtering` funciona como um **índice de busca simplificado**, onde:
 
 ---
 
+# 🗜️ Compactação do JSON (otimização avançada)
+
+Após gerar o JSON original, foi criado um segundo processo chamado **Compactor/Optimizer**, responsável por reduzir drasticamente o tamanho do arquivo.
+
+📉 Resultado real obtido:
+
+```
+~1700 KB → ~870 KB
+```
+
+Ou seja, praticamente **50% de redução** sem perda de informação.
+
+---
+
+## 🧠 Problema do JSON original
+
+O JSON tradicional sofre com:
+
+* 🔁 Repetição de strings (principalmente nomes de artistas)
+* 🏷️ Chaves longas repetidas milhares de vezes
+* 📦 Estrutura aninhada com overhead desnecessário
+* 🧾 Dados textuais redundantes
+
+Exemplo do problema:
+
+```json
+{
+  "artist": "Avenged Sevenfold",
+  "songs": [...]
+}
+```
+
+O nome do artista aparece repetidamente no arquivo inteiro.
+
+---
+
+## 🧩 Estratégias de compactação aplicadas
+
+### 🔹 1. Normalização de artistas (deduplicação estrutural)
+
+Ao invés de repetir o nome do artista, ele é armazenado uma única vez:
+
+```json
+{
+  "artists": [
+    "Avenged Sevenfold",
+    "Metallica"
+  ]
+}
+```
+
+E cada música referencia o artista por índice:
+
+```json
+{
+  "a": 0
+}
+```
+
+👉 Isso transforma uma string repetida em um número pequeno.
+
+---
+
+### 🔹 2. Estrutura flat (remoção de nesting)
+
+Antes:
+
+```json
+[
+  { "artist": "...", "songs": [...] }
+]
+```
+
+Depois:
+
+```json
+{
+  "artists": [...],
+  "songs": [...]
+}
+```
+
+👉 Menos estrutura = menos bytes.
+
+---
+
+### 🔹 3. Encurtamento de chaves
+
+Antes:
+
+```json
+"title", "difficulties", "filtering"
+```
+
+Depois:
+
+```json
+["t", "d", "f", "a"]
+```
+
+👉 Redução massiva de repetição textual.
+
+---
+
+### 🔹 4. Bitmask para dificuldades
+
+As dificuldades deixam de ser lista de strings e viram um número.
+
+#### 📌 Mapeamento:
+
+| dificuldade | valor |
+| ----------- | ----- |
+| easy        | 1     |
+| medium      | 2     |
+| hard        | 4     |
+| expert      | 8     |
+
+#### 📌 Exemplo:
+
+Hard + Expert:
+
+```
+4 + 8 = 12
+```
+
+```json
+{
+  "d": 12
+}
+```
+
+#### 📌 Caso especial:
+
+```
+["all"] → 15
+```
+
+---
+
+### 🔹 5. Remoção de whitespace
+
+JSON final não usa `prettyPrint`.
+
+👉 Remove espaços, tabs e quebras de linha desnecessárias.
+
+---
+
+## 🧠 Como ler os dados compactados
+
+### 🎵 Recuperar artista
+
+```kotlin
+val artistName = artists[song.a]
+```
+
+---
+
+### 🎚️ Decodificar dificuldades
+
+```kotlin
+fun decode(bitmask: Int): List<String> {
+    val result = mutableListOf<String>()
+
+    if (bitmask and 1 != 0) result.add("easy")
+    if (bitmask and 2 != 0) result.add("medium")
+    if (bitmask and 4 != 0) result.add("hard")
+    if (bitmask and 8 != 0) result.add("expert")
+
+    return result
+}
+```
+
+---
+
+## 💡 Insight principal
+
+Essa compactação segue um princípio clássico:
+
+> **Remover redundância e substituir texto por referências**
+
+Você basicamente transforma:
+
+```
+JSON legível → JSON eficiente
+```
+
+Sem perder a capacidade de reconstrução dos dados.
+
+---
+
 ## ⚡ Performance
 
 O script já foi pensado pra ser leve:
@@ -273,6 +467,12 @@ O script já foi pensado pra ser leve:
 * ✅ `.lowercase()` controlado
 * ✅ deduplicação imediata
 * ✅ uso de `Sequence` em parsing
+
+E após compactação:
+
+* 📉 menor uso de memória
+* ⚡ leitura mais rápida
+* 🚀 melhor performance geral
 
 ---
 
@@ -290,9 +490,9 @@ O script já foi pensado pra ser leve:
 
 * Criar:
 
-    * CLI
-    * App Android
-    * Web UI
+  * CLI
+  * App Android
+  * Web UI
 
 ### 📊 Outras ideias
 

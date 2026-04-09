@@ -1,7 +1,3 @@
-// Necessário no Gradle:
-// implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
-// plugins { kotlin("plugin.serialization") }
-
 import kotlinx.serialization.*
 import kotlinx.serialization.json.*
 import java.io.File
